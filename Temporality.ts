@@ -21,7 +21,7 @@ declare global {
         daysInYear():number
         /** @remarks Retourne l'heure au format local ex: hh:mm:ss */
         getStringTime():string
-        /** @remarks retourne la date au format local ex: 11 janvier 2000 */
+        /** @remarks retourne la date au format local ex: jj//mm/aaaa */
         getStringDate():string
         /** * @remarks retourne la dénomination du jour */
         getStringDay():string
@@ -31,34 +31,32 @@ declare global {
         getString(dateString:DateString):string
     }
 }
+//#region "PROTOTYPES DATE"
+const constanteDaysPerMonth:number = 30.436875;
+const constanteDaysPerYear:number = 365.2425;
 Date.prototype.addYear = function(year:number):Date{
-    let date:Date = this
+    let date:Date = new Date(this.getTime() + (year * constanteDaysPerYear * 24*60*60*1000))
     date.setFullYear(this.getFullYear()+year)
     return date
 }
 Date.prototype.addMonth = function(month:number):Date{
-    let date:Date = this
-    date.setMonth(this.getMonth()+month)
+    let date:Date = new Date(this.getTime() + (month * constanteDaysPerMonth * 24*60*60*1000))
     return date
 }
 Date.prototype.addDay = function(day:number):Date{
-    let date:Date = this
-    date.setDate(this.getDate()+day)
+    let date:Date = new Date(this.getTime() + (day * 24*60*60*1000))
     return date
 }
 Date.prototype.addHour = function(hour:number):Date{
-    let date:Date = this
-    date.setHours(this.getHours()+hour)
+    let date:Date = new Date(this.getTime() + (hour * 60*60*1000))
     return date
 }
 Date.prototype.addMinute = function(minute:number):Date{
-    let date:Date = this
-    date.setMinutes(this.getMinutes()+minute)
+    let date:Date = new Date(this.getTime() + (minute*60*1000))
     return date
 }
 Date.prototype.addSecond = function(second:number):Date{
-    let date:Date = this
-    date.setSeconds(this.getSeconds()+second)
+    let date:Date = new Date(this.getTime() + (second*1000))
     return date
 }
 Date.prototype.isWeekEnd = function():boolean{
@@ -119,9 +117,9 @@ Date.prototype.getString = function(dateString:DateString):string{
     }
     return str
 }
-//-----------------------------------------------------------------------------------
-//------------------------------- OBJECTS PERIODE -----------------------------------
-//-----------------------------------------------------------------------------------
+//#endregion "PROTOTYPES DATE"
+
+//#region "OBJECTS PERIODE" ------------------------------- OBJECTS PERIODE
 export enum TimeType{
     timestamp = "timestamp",
     seconds = "seconds",
@@ -155,28 +153,32 @@ export enum Chronologie {
     actual = "actual",
     futur = "futur"
 }
-//-----------------------------------------------------------------------------------
-//----------------------------------- PERIODE ---------------------------------------
-//-----------------------------------------------------------------------------------
+//#endregion "OBJECTS PERIODE"
+
+//#region "PERIODE" ----------------------------------- PERIODE
 export class Periode{
     referenceDate:Date = new Date()
     debut:Date = new Date()
     fin:Date = new Date()
     modifier:number = 0
     private periodeType:PeriodeType = PeriodeType.mensuelle
-    constructor(date?:Date|string, modifier?:number){
-        this.referenceDate = date?new Date(date):new Date()
+    constructor(date?:Date|string, debut?:Date|string, fin?:Date|string, modifier?:number){
+        this.debut = debut?new Date(debut):new Date()
+        this.fin = fin?new Date(fin):new Date()
         this.modifier = modifier?modifier:0
-        this.SetPeriod(this.modifier)
+        this.referenceDate = date?new Date(date):new Date()
+        if(!(debut && fin)){
+            this.SetPeriod(this.referenceDate, this.modifier)
+        }
     }
     /**
      * @remarks Calcule et définit une periode par rapport a la date actuelle et un modifier
      * @param modifier integer permet de passer d'une periode a l'autre simplement
      * @param date La date utilisée pour trouver la periode si non défini, se réfère a "new Date()"
      */
-    public SetPeriod(modifier?:number, date?:Date):void{
+    public SetPeriod(date?:Date, modifier?:number):void{
         if(!modifier){modifier = this.modifier}
-        let periodeData:PeriodeData = this.GetPeriod(modifier, date)
+        let periodeData:PeriodeData = this.GetPeriod(date, modifier)
         this.debut = periodeData.debut
         this.fin = periodeData.fin
     }
@@ -185,7 +187,7 @@ export class Periode{
      * @param modifier integer permet de passer d'une periode a l'autre simplement
      * @param date La date utilisée pour trouver la periode si non défini, se réfère a "new Date()"
      */
-    public GetPeriod(modifier?:number, date?:Date):PeriodeData{
+    public GetPeriod(date?:Date, modifier?:number):PeriodeData{
         if(!modifier){modifier = this.modifier}
         modifier = Math.trunc(modifier)
         if(!date){date = new Date(this.referenceDate)}
@@ -251,7 +253,7 @@ export class Periode{
      */
     public SetPeriodeType(periodeType:PeriodeType):void{
         this.periodeType = periodeType
-        this.SetPeriod(this.modifier)
+        this.SetPeriod(this.referenceDate, this.modifier)
     }
     /**
      * @remarks Retourne le type de période utilisé
@@ -301,16 +303,22 @@ export class Periode{
      * @param debut la date de début pour le calcul, si non définie, se réfère a l'objet periode
      * @param fin la date de fin pour le calcul, si non définie, se réfère a l'objet periode
      */
-    public Difference(toTime?:TimeType, debut?:Date|string, fin?:Date|string){
+    public Difference(toTime?:TimeType, debut?:Date|string, fin?:Date|string, decimal?:number){
         if(!toTime){toTime = TimeType.jours}
         debut = new Date(debut?debut:this.debut)
         fin = new Date(fin?fin:this.fin)
         let diff:number = fin.getTime() - debut.getTime()
-        return this.Convert(toTime, diff)
+        return this.Convert(toTime, diff, decimal)
     }
-    public Convert(toTime:TimeType, time:number, precision?:number):number{
-        //arrondit au nombre supérieur, peut poser des problèmes
-        if(!precision){precision = 0}
+    /**
+     * @remarks Retourne une durée TimeType
+     * @param toTime TimeType a utiliser en sortie par ex TimeType.heures, TimeType.jours, etc...
+     * @param time Est la durée a convertir au format timestamp (millisecondes accesible via exDate.getTime())
+     * @param decimal Est le nombres de décimales après la virgule
+     */
+    public Convert(toTime:TimeType, time:number, decimal?:number):number{
+        //arrondi au nombre supérieur, peut poser des problèmes
+        if(!decimal){decimal = 0}
         let calc:number = 0
         switch(toTime){
             case TimeType.timestamp:
@@ -332,17 +340,18 @@ export class Periode{
                 calc = time/1000/60/60/24/7
                 break
             case TimeType.mois:
-                calc = time/1000/60/60/24/30
+                calc = time/1000/60/60/24/constanteDaysPerMonth
                 break
             case TimeType.annee:
-                calc = time/1000/60/60/24/365
+                calc = time/1000/60/60/24/constanteDaysPerYear
                 break
         }
-        if(calc < 1){
-            time = this.floatFormat(calc, precision)
+        time = this.floatFormat(calc, decimal)
+        /*if(calc < 1){
+            time = this.floatFormat(calc, decimal)
         }else{
             time = Math.ceil(calc)
-        }
+        }//*/
         return time
     }
     private floatFormat(nbr:number, afterPoint?:number):number{
@@ -350,7 +359,9 @@ export class Periode{
         return Number(Number.parseFloat(nbr.toString()).toFixed(afterPoint))
     }
 }
-/*----------------------------GLOBAL PERIODE---------------------------------*/
+//#endregion "PERIODE"
+
+//#region "GLOBAL" ----------------------------GLOBAL PERIODE
 //Define interface PeriodeClass globale
 interface PeriodeConstructor{
     new (date?:Date|string):Periode
@@ -369,4 +380,4 @@ Object.setPrototypeOf(PeriodeFunction, Periode)
 declare global{
     var Periode:PeriodeConstructor
 }
-/*----------------------------GLOBAL PERIODE---------------------------------*/
+//#endregion "GLOBAL"
