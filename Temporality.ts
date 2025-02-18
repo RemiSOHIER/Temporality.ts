@@ -27,6 +27,8 @@ declare global {
         getStringDay():string
         /** @remarks Retourne la dénomination du mois */
         getStringMonth():string
+        /** @remarks Retourne le numéro de la semaine actuelle*/
+        getWeekNumber(method?:"ISO"|"US"|"FORMAL"|"SIMPLE"):number
         /** @param dateString (DateString) le type de text voulu en résultat */
         getString(dateString:DateString):string
     }
@@ -87,6 +89,47 @@ Date.prototype.getStringMonth = function():string{
     let month:string = monthStr[0].toUpperCase()+monthStr.slice(1)
     return month
 }
+Date.prototype.getWeekNumber = function (method: "ISO" | "US" | "FORMAL" | "SIMPLE" = "ISO"): number {
+    const tempDate = new Date(this.getFullYear(), this.getMonth(), this.getDate());
+
+    switch (method) {
+        case "ISO": {
+            // Récupère le jour de la semaine (Lundi = 1, Dimanche = 7)
+            const dayOfWeek = (tempDate.getDay() + 6) % 7; // Transforme Dimanche(0) -> Samedi(6)
+            tempDate.setDate(tempDate.getDate() - dayOfWeek + 3); // Aller au jeudi ISO
+
+            // Trouver le lundi de la première semaine ISO
+            const firstMonday = new Date(tempDate.getFullYear(), 0, 4);
+            firstMonday.setDate(firstMonday.getDate() - ((firstMonday.getDay() + 6) % 7));
+
+            // Calcul du numéro de la semaine ISO
+            return Math.ceil(((tempDate.getTime() - firstMonday.getTime()) / 86400000 + 1) / 7);
+        }
+
+        case "US": {
+            // Numérotation américaine : la première semaine commence le 1er janvier, et les semaines commencent le dimanche
+            const startOfYear = new Date(this.getFullYear(), 0, 1);
+            const diff = (tempDate.getTime() - startOfYear.getTime()) / 86400000;
+            return Math.floor((diff + startOfYear.getDay()) / 7) + 1;
+        }
+
+        case "FORMAL": {
+            // Numérotation formelle : la première semaine commence le 1er janvier, et les semaines commencent le lundi
+            const startOfYear = new Date(this.getFullYear(), 0, 1);
+            const startDay = startOfYear.getDay() || 7; // Transforme Dimanche (0) en 7
+            const diff = (tempDate.getTime() - startOfYear.getTime()) / 86400000;
+            return Math.floor((diff + startDay - 1) / 7) + 1;
+        }
+
+        case "SIMPLE": {
+            // Numérotation simple : la première semaine commence le 1er janvier, la deuxième le 8 janvier, etc.
+            return Math.ceil((tempDate.getDate() + tempDate.getMonth() * 31) / 7);
+        }
+
+        default:
+            throw new Error("Méthode inconnue !");
+    }
+};
 export enum DateString{
     heure = "heure",
     dateNumeric = "dateNumeric",
@@ -154,6 +197,41 @@ export enum Chronologie {
     futur = "futur"
 }
 //#endregion "OBJECTS PERIODE"
+
+//#region "DURATION"
+export class Duration{
+    timestamp!:number
+    dateString!:DateString
+    timeString!:string
+    constructor(time?:number|string, dateString?:DateString){
+        if(typeof time === "string" && this.isValidTimeFormat(time)) {
+            this.timeString = time;
+            this.timestamp = this.ToTimestamp();
+        }else if(typeof time === "number") {
+            this.timestamp = time;
+            this.timeString = this.ToString()
+        }else{
+            this.timestamp = 0;
+        }
+        this.dateString = dateString?dateString:DateString.dateComplete
+    }
+    private isValidTimeFormat(time:string):boolean {
+        return /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.test(time);
+    }
+    public ToTimestamp():number {
+        if (!this.timeString) return 0;
+        const [hours, minutes, seconds] = this.timeString.split(":").map(Number);
+        return hours * 3600000 + minutes * 60000 + seconds * 1000;
+    }
+    public ToString():string{
+        const hours = Math.floor(this.timestamp / 1000 / 60 / 60);
+        const minutes = Math.floor((this.timestamp / 1000 / 60) % 60);
+        const seconds = Math.floor((this.timestamp / 1000) % 60);
+        this.timeString = `${hours < 10?"0":""}${hours}:${minutes < 10?"0":""}${minutes}:${seconds < 10?"0":""}${seconds}`;
+        return this.timeString
+    }
+}
+//#endregion
 
 //#region "PERIODE" ----------------------------------- PERIODE
 export class Periode{
@@ -361,7 +439,21 @@ export class Periode{
 }
 //#endregion "PERIODE"
 
-//#region "GLOBAL" ----------------------------GLOBAL PERIODE
+//#region "GLOBAL" ----------------------------GLOBAL
+//Define interface DurationClass globale
+interface DurationConstructor{
+    new (time?:number|string, dateString?:DateString):Duration
+    (time?:number|string, dateString?:DateString):Duration
+}
+//Implements function Periode as constructor
+const DurationFunction = function(time?:number|string, dateString?:DateString):Duration{
+    return new Duration(time, dateString)
+} as DurationConstructor
+//Associer la classe a la fonction pour usage de 'new'
+DurationFunction.prototype = Duration.prototype
+//Associer la classe a la fonction
+Object.setPrototypeOf(DurationFunction, Duration)
+
 //Define interface PeriodeClass globale
 interface PeriodeConstructor{
     new (date?:Date|string):Periode
@@ -378,6 +470,7 @@ Object.setPrototypeOf(PeriodeFunction, Periode)
 
 //declare global Periode class/function
 declare global{
+    var Duration:DurationConstructor
     var Periode:PeriodeConstructor
 }
 //#endregion "GLOBAL"
