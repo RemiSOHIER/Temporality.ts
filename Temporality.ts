@@ -27,6 +27,8 @@ declare global {
         getStringDay():string
         /** @remarks Retourne la dénomination du mois */
         getStringMonth():string
+        /** @remarks Retourne la liste des jours locaux de la semaine */
+        getStringLocalWeekdays():string[]
         /** @remarks Retourne le numéro de la semaine actuelle*/
         getWeekArray(weekNumber?: number, method?:"ISO"|"US"|"FORMAL"|"SIMPLE"):Date[]
         /** @remarks Retourne le numéro de la semaine actuelle*/
@@ -90,6 +92,15 @@ Date.prototype.getStringMonth = function():string{
     let monthStr:string = this.toLocaleString("default", {month: "long"})
     let month:string = monthStr[0].toUpperCase()+monthStr.slice(1)
     return month
+}
+Date.prototype.getStringLocalWeekdays = function getStringLocalWeekdays(locale:string = 'fr-FR'): string[] {
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: 'long' });
+    // Générer les jours en partant du lundi
+    const days = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date(1970, 0, 5 + i); // 5 Janvier 1970 = Lundi
+        return formatter.format(date);
+    });
+    return days;
 }
 Date.prototype.getWeekArray = function (weekNumber?: number, method:"ISO"|"US"|"FORMAL"|"SIMPLE" = "ISO"):Date[] {
     const year = this.getFullYear();
