@@ -28,6 +28,8 @@ declare global {
         /** @remarks Retourne la dénomination du mois */
         getStringMonth():string
         /** @remarks Retourne le numéro de la semaine actuelle*/
+        getWeekArray(weekNumber?: number, method?:"ISO"|"US"|"FORMAL"|"SIMPLE"):Date[]
+        /** @remarks Retourne le numéro de la semaine actuelle*/
         getWeekNumber(method?:"ISO"|"US"|"FORMAL"|"SIMPLE"):number
         /** @param dateString (DateString) le type de text voulu en résultat */
         getString(dateString:DateString):string
@@ -89,7 +91,53 @@ Date.prototype.getStringMonth = function():string{
     let month:string = monthStr[0].toUpperCase()+monthStr.slice(1)
     return month
 }
-Date.prototype.getWeekNumber = function (method: "ISO" | "US" | "FORMAL" | "SIMPLE" = "ISO"): number {
+Date.prototype.getWeekArray = function (weekNumber?: number, method:"ISO"|"US"|"FORMAL"|"SIMPLE" = "ISO"):Date[] {
+    const year = this.getFullYear();
+    let firstDayOfYear: Date;
+    let weekStart: Date;
+    switch (method) {
+        case "ISO": {
+            // Trouver le premier jeudi de l'année
+            firstDayOfYear = new Date(year, 0, 4);
+            const dayOfWeek = firstDayOfYear.getDay() || 7; // Transforme Dimanche (0) en 7
+            firstDayOfYear.setDate(firstDayOfYear.getDate() + (1 - dayOfWeek)); // Se placer au premier lundi ISO
+            
+            // Calculer le début de la semaine demandée
+            weekStart = new Date(firstDayOfYear);
+            weekStart.setDate(firstDayOfYear.getDate() + ((weekNumber ?? this.getWeekNumber("ISO")) - 1) * 7);
+            break;
+        }
+        case "US": {
+            // La première semaine commence le 1er janvier, et les semaines commencent le dimanche
+            firstDayOfYear = new Date(year, 0, 1);
+            weekStart = new Date(firstDayOfYear);
+            weekStart.setDate(firstDayOfYear.getDate() + ((weekNumber ?? this.getWeekNumber("US")) - 1) * 7 - firstDayOfYear.getDay());
+            break;
+        }
+        case "FORMAL": {
+            // La première semaine commence le 1er janvier, et les semaines commencent le lundi
+            firstDayOfYear = new Date(year, 0, 1);
+            const firstMondayOffset = (8 - firstDayOfYear.getDay()) % 7; // Décale jusqu'au premier lundi
+            firstDayOfYear.setDate(firstDayOfYear.getDate() + firstMondayOffset);
+
+            weekStart = new Date(firstDayOfYear);
+            weekStart.setDate(firstDayOfYear.getDate() + ((weekNumber ?? this.getWeekNumber("FORMAL")) - 1) * 7);
+            break;
+        }
+        case "SIMPLE": {
+            // La première semaine commence le 1er janvier, la deuxième le 8 janvier, etc.
+            firstDayOfYear = new Date(year, 0, 1);
+            weekStart = new Date(firstDayOfYear);
+            weekStart.setDate(firstDayOfYear.getDate() + ((weekNumber ?? this.getWeekNumber("SIMPLE")) - 1) * 7);
+            break;
+        }
+        default:
+            throw new Error("Méthode inconnue !");
+    }
+    // Générer l'array des 7 jours de la semaine
+    return Array.from({ length: 7 }, (_, i) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i));
+};
+Date.prototype.getWeekNumber = function(method:"ISO"|"US"|"FORMAL"|"SIMPLE" = "ISO"):number{
     const tempDate = new Date(this.getFullYear(), this.getMonth(), this.getDate());
 
     switch (method) {
@@ -105,14 +153,12 @@ Date.prototype.getWeekNumber = function (method: "ISO" | "US" | "FORMAL" | "SIMP
             // Calcul du numéro de la semaine ISO
             return Math.ceil(((tempDate.getTime() - firstMonday.getTime()) / 86400000 + 1) / 7);
         }
-
         case "US": {
             // Numérotation américaine : la première semaine commence le 1er janvier, et les semaines commencent le dimanche
             const startOfYear = new Date(this.getFullYear(), 0, 1);
             const diff = (tempDate.getTime() - startOfYear.getTime()) / 86400000;
             return Math.floor((diff + startOfYear.getDay()) / 7) + 1;
         }
-
         case "FORMAL": {
             // Numérotation formelle : la première semaine commence le 1er janvier, et les semaines commencent le lundi
             const startOfYear = new Date(this.getFullYear(), 0, 1);
@@ -120,12 +166,10 @@ Date.prototype.getWeekNumber = function (method: "ISO" | "US" | "FORMAL" | "SIMP
             const diff = (tempDate.getTime() - startOfYear.getTime()) / 86400000;
             return Math.floor((diff + startDay - 1) / 7) + 1;
         }
-
         case "SIMPLE": {
             // Numérotation simple : la première semaine commence le 1er janvier, la deuxième le 8 janvier, etc.
             return Math.ceil((tempDate.getDate() + tempDate.getMonth() * 31) / 7);
         }
-
         default:
             throw new Error("Méthode inconnue !");
     }
