@@ -236,7 +236,8 @@ export enum PeriodeType{
     bimensuelle = "bimensuelle",
     trimestrielle = "trimestrielle",
     semestrielle = "semestrielle",
-    annuelle = "annuelle"
+    annuelle = "annuelle",
+    custom = "custom"
 }
 export class PeriodeData{
     debut:Date = new Date()
@@ -300,16 +301,26 @@ export class Periode{
         this.fin = fin?new Date(fin):new Date()
         this.modifier = modifier?modifier:0
         this.referenceDate = date?new Date(date):new Date()
-        if(!(debut && fin)){
-            this.SetPeriod(this.referenceDate, this.modifier)
+        if(!(debut && fin) && this.periodeType !== PeriodeType.custom){
+            this.SetPeriodByDate(this.referenceDate, this.modifier)
         }
+    }
+    /**
+     * @param debut 
+     * @param fin 
+     * @description Définit la période en custom et ne calculera pas le début et la fin
+     */
+    public SetCustomPeriod(debut:Date|string, fin:Date|string):void{
+        this.debut = new Date(debut)
+        this.fin = new Date(fin)
+        this.periodeType = PeriodeType.custom
     }
     /**
      * @remarks Calcule et définit une periode par rapport a la date actuelle et un modifier
      * @param modifier integer permet de passer d'une periode a l'autre simplement
      * @param date La date utilisée pour trouver la periode si non défini, se réfère a "new Date()"
      */
-    public SetPeriod(date?:Date, modifier?:number):void{
+    public SetPeriodByDate(date?:Date, modifier?:number):void{
         if(!modifier){modifier = this.modifier}
         let periodeData:PeriodeData = this.GetPeriod(date, modifier)
         this.debut = periodeData.debut
@@ -343,6 +354,8 @@ export class Periode{
             case PeriodeType.annuelle:
                 nbMonths = 12
                 break
+            default:
+                break;
         }
         //for inner month periods
         if(this.periodeType == PeriodeType.hebdomadaire || this.periodeType == PeriodeType.journalier || this.periodeType == PeriodeType.horaire){
@@ -386,7 +399,7 @@ export class Periode{
      */
     public SetPeriodeType(periodeType:PeriodeType):void{
         this.periodeType = periodeType
-        this.SetPeriod(this.referenceDate, this.modifier)
+        this.SetPeriodByDate(this.referenceDate, this.modifier)
     }
     /**
      * @remarks Retourne le type de période utilisé
